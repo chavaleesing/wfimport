@@ -3,7 +3,6 @@ import numpy as np
 import mysql.connector
 import os
 import gc
-from mysql.connector import Error
 from .notify import line_alert
 
 
@@ -41,6 +40,7 @@ def import_data_to_mysql(connection, cursor, file_path, filename):
                 line_alert(f"🚨[ERROR][RECONCILATION] \n{commited_reocrds} == {total_records} on file: {filename}")
     except mysql.connector.Error as e:
         print(f"Error connecting to the database or inserting data: {e}")
+        line_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
     finally:
         del df
         gc.collect()
@@ -62,8 +62,9 @@ def bulk_import(folder_path):
             import_data_to_mysql(connection, cursor, os.path.join(folder_path, filename), filename)
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
         line_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
-    except Error as e:
+    except Exception as e:
         print(f"Error: {e}")
+        line_alert(f"🚨[ERROR] \nError while importing data: {e}")
     finally:
         if connection.is_connected():
             cursor.close()
