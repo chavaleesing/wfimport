@@ -13,7 +13,7 @@ def import_data_to_mysql(connection, cursor, file_path, filename):
             cursor.execute(f"SELECT COUNT(id) from {table_name};")
             before_inserted_records = cursor.fetchone()[0]
         
-        df = pd.read_csv(file_path, delimiter='|')
+        df = pd.read_csv(file_path, delimiter='|', dtype=get_col_convert_col_str(table_name))
         df = df.replace(np.nan, None)
         total_records = len(df)
         line_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
@@ -45,6 +45,15 @@ def import_data_to_mysql(connection, cursor, file_path, filename):
         del df
         gc.collect()
 
+def get_col_convert_col_str(tbl_name: str):
+    mapping = {
+        "tbl_customers": ["tn_auth_flag"],
+        "tbl_customers_audit": ["tn_auth_flag"],
+        "tbl_customer_address": ["postal_code"]
+    }
+    if mapping.get(tbl_name):
+        return {i: str for i in mapping[tbl_name]}
+    return {}
 
 def bulk_import(folder_path):
     try:
