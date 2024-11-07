@@ -1,16 +1,19 @@
 import os
 import mysql.connector
-from mysql.connector import Error
+from mysql.connector import pooling, Error
 
 
 def get_conn():
     try:
-        connection = mysql.connector.connect(
+        pool = pooling.MySQLConnectionPool(
+            pool_name="poolwf",
+            pool_size=5,
             host=os.getenv("HOST"),
             user=os.getenv("USER"),
             password=os.getenv("PASSWORD"),
             database=os.getenv("DATABASE")
         )
+        connection = pool.get_connection()
         print("Database connection established.")
         return connection
     except Error as e:
