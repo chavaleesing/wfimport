@@ -15,15 +15,12 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename):
         try:
-            file_path = 'data/credit/batch_welfare_datainno_tbl_customer_credit_20241105_02.txt'
-            filename = 'batch_welfare_datainno_tbl_customer_credit_20241105_02.txt'
             table_name = "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(table_name)
             
             notnull_cols = self.get_notnull_cols(tbl_name=table_name)
-            print(notnull_cols)
-            df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(table_name))
+            df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(table_name), low_memory=False)
             df = df.replace(np.nan, None)
             for col in notnull_cols:
                 df[col] = df[col].fillna("")
@@ -82,7 +79,6 @@ class ImportData:
             """, (self.conn.database, tbl_name))
         return [row[0] for row in self.cursor.fetchall()]
     
-
     def bulk_import(self, folder_path):
         try:
             line_alert(f"🆗[INFO] \nStart import file(s)")
