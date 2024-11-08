@@ -15,21 +15,18 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename):
         try:
-            table_name = "_".join(filename.split("_")[3:-2])
+            tbl_name = "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
-                before_inserted_records = self.get_count_records(table_name)
-            
-            notnull_cols = self.get_notnull_cols(tbl_name=table_name)
-            df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(table_name), low_memory=False)
+                before_inserted_records = self.get_count_records(tbl_name)
+            df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(tbl_name), low_memory=False)
             df = df.replace(np.nan, None)
-            for col in notnull_cols:
-                df[col] = df[col].fillna("")
+            # df = self.replace_empty_str(df, tbl_name)
             total_records = len(df)
             line_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
             print(f"\n ----------- \n{file_path} loaded successfully from file.")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
-            sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+            sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
             commited_reocrds = 0
             batch_size = int(os.getenv("BATCH_SIZE", 10000))
             
@@ -42,7 +39,7 @@ class ImportData:
             print(f"Data imported successfully into the MySQL database.")
             
             if int(os.getenv("IS_RECONCILE", 0)):
-                inserted_records = self.get_count_records(table_name)
+                inserted_records = self.get_count_records(tbl_name)
                 if inserted_records == total_records - before_inserted_records:
                     line_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
                 else:
@@ -53,6 +50,12 @@ class ImportData:
         finally:
             del df
             gc.collect()
+
+    def replace_empty_str(self, df, tbl_name):
+        notnull_cols = self.get_notnull_cols(tbl_name=tbl_name)
+        for col in notnull_cols:
+            df[col] = df[col].fillna("")
+        return df
 
     def get_col_convert_col_str(self, tbl_name: str):
         mapping = {
