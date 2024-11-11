@@ -15,7 +15,7 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename):
         try:
-            tbl_name = "_".join(filename.split("_")[3:-2])
+            tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
             df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(tbl_name), low_memory=False)

@@ -11,7 +11,8 @@ def get_conn():
             host=os.getenv("HOST"),
             user=os.getenv("USER"),
             password=os.getenv("PASSWORD"),
-            database=os.getenv("DATABASE")
+            database=os.getenv("DATABASE"),
+            allow_local_infile=True
         )
         connection = pool.get_connection()
         print("Database connection established.")
