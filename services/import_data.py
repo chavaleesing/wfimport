@@ -19,7 +19,7 @@ class ImportData:
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
             df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(tbl_name), low_memory=False)
-            df = df.replace(np.nan, None)
+            df = df.replace({np.nan: None, r'\\n': '\n'}, regex=True)
             df = self.replace_empty_str(df, tbl_name)
             total_records = len(df)
             ms_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
