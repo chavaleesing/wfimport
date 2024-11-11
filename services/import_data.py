@@ -3,7 +3,7 @@ import numpy as np
 import mysql.connector
 import os
 import gc
-from services.notify import line_alert
+from services.notify import ms_alert
 from database import get_conn, close_conn
 
 
@@ -20,9 +20,9 @@ class ImportData:
                 before_inserted_records = self.get_count_records(tbl_name)
             df = pd.read_csv(file_path, delimiter='|', dtype=self.get_col_convert_col_str(tbl_name), low_memory=False)
             df = df.replace(np.nan, None)
-            # df = self.replace_empty_str(df, tbl_name)
+            df = self.replace_empty_str(df, tbl_name)
             total_records = len(df)
-            line_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
+            ms_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
             print(f"\n ----------- \n{file_path} loaded successfully from file.")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
@@ -41,12 +41,12 @@ class ImportData:
             if int(os.getenv("IS_RECONCILE", 0)):
                 inserted_records = self.get_count_records(tbl_name)
                 if inserted_records == total_records - before_inserted_records:
-                    line_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
+                    ms_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
                 else:
-                    line_alert(f"🚨[ERROR][RECONCILATION] \n{commited_reocrds} == {total_records} on file: {filename}")
+                    ms_alert(f"🚨[ERROR][RECONCILATION] \n{commited_reocrds} == {total_records} on file: {filename}")
         except mysql.connector.Error as e:
             print(f"Error connecting to the database or inserting data: {e}")
-            line_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
+            ms_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
         finally:
             del df
             gc.collect()
@@ -78,20 +78,20 @@ class ImportData:
         self.cursor.execute("""
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND IS_NULLABLE = 'NO'
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND IS_NULLABLE = 'NO' AND DATA_TYPE = 'varchar'
             """, (self.conn.database, tbl_name))
         return [row[0] for row in self.cursor.fetchall()]
     
     def bulk_import(self, folder_path):
         try:
-            line_alert(f"🆗[INFO] \nStart import file(s)")
+            ms_alert(f"🆗[INFO] \nStart import file(s)")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
             for filename in os.listdir(folder_path):
                 self.import_data_to_mysql(os.path.join(folder_path, filename), filename)
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-            line_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
+            ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
         except Exception as e:
             print(f"Error: {e}")
-            line_alert(f"🚨[ERROR] \nError while importing data: {e}")
+            ms_alert(f"🚨[ERROR] \nError while importing data: {e}")
         finally:
             close_conn(self.conn)
