@@ -39,11 +39,11 @@ class ImportData:
             print(f"Data imported successfully into the MySQL database.")
             
             if int(os.getenv("IS_RECONCILE", 0)):
-                inserted_records = self.get_count_records(tbl_name)
-                if inserted_records == total_records - before_inserted_records:
+                count_all_records = self.get_count_records(tbl_name)
+                if count_all_records == total_records + before_inserted_records:
                     ms_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
                 else:
-                    ms_alert(f"🚨[ERROR][RECONCILATION] \n{commited_reocrds} == {total_records} on file: {filename}")
+                    ms_alert(f"🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
         except mysql.connector.Error as e:
             print(f"Error connecting to the database or inserting data: {e}")
             ms_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
