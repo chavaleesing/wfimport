@@ -1,8 +1,4 @@
-import pandas as pd
-import numpy as np
-import mysql.connector
 import os
-import gc
 from services.notify import line_alert
 from database import get_conn, close_conn
 
@@ -34,7 +30,7 @@ class LoadData:
         self.cursor.execute("""
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND IS_NULLABLE = 'YES' AND DATA_TYPE = 'varchar'
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND IS_NULLABLE = 'YES'
             """, (self.conn.database, tbl_name))
         return [row[0] for row in self.cursor.fetchall()]
     
@@ -46,6 +42,7 @@ class LoadData:
     
     def gen_script(self, folder_path, filename):
         tbl_name = "_".join(filename.split("_")[3:-2])
+        tbl_name = 'tbl_privilege_txn_current'
         all_columns = self.get_all_cols(tbl_name)
         nullable_columns = self.get_null_cols(tbl_name)
         columns_clause = ', '.join(all_columns)
