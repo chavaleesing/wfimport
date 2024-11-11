@@ -1,5 +1,5 @@
 import os
-from services.notify import line_alert
+from services.notify import ms_alert
 from database import get_conn, close_conn
 
 
@@ -14,15 +14,18 @@ class LoadData:
 
     def bulk_load(self, folder_path):
         try:
-            line_alert(f"🆗[INFO] \nStart import file(s)")
+            ms_alert(f"🆗[INFO] \nStart import file(s)")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
             for filename in os.listdir(folder_path):
-                self.gen_script(os.path.join(folder_path, filename), filename)
+                sql = self.gen_script(os.path.join(folder_path, filename), filename)
+                print(sql)
+                self.cursor.execute(sql)
+                self.conn.commit()
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-            line_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
+            ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
         except Exception as e:
             print(f"Error: {e}")
-            line_alert(f"🚨[ERROR] \nError while importing data: {e}")
+            ms_alert(f"🚨[ERROR] \nError while importing data: {e}")
         finally:
             close_conn(self.conn)
     
@@ -40,13 +43,12 @@ class LoadData:
             """)
         return [row[0] for row in self.cursor.fetchall()]
     
-    def gen_script(self, folder_path, filename):
+    def gen_script(self, folder_path, filename) -> str:
         tbl_name = "_".join(filename.split("_")[3:-2])
-        tbl_name = 'tbl_privilege_txn_current'
         all_columns = self.get_all_cols(tbl_name)
         nullable_columns = self.get_null_cols(tbl_name)
         columns_clause = ', '.join(all_columns)
-        set_clause = ', '.join([f"{col} = NULLIF({col}, '')" for col in nullable_columns])
+        set_clause = ', '.join([f"{col} = NULLIF(@{col}, '')" for col in nullable_columns])
 
         # Create the LOAD DATA command
         load_data_query = f"""
@@ -58,6 +60,5 @@ class LoadData:
             SET {set_clause};
         """
 
-        # Output the generated query
-        print(load_data_query)
-        print("--------")
+        return load_data_query
+
