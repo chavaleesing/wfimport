@@ -15,10 +15,10 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename):
         try:
-            df = self.preprocess_and_load(file_path)
             tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
+            df = self.preprocess_and_load(file_path, "|", self.get_count_cols(tbl_name))
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
@@ -45,7 +45,7 @@ class ImportData:
                 else:
                     ms_alert(f"🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
         except mysql.connector.Error as e:
-            print(f"Error connecting to the database or inserting data: {e}")
+            print(f"Error while inserting data: {e}")
             ms_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
         finally:
             del df
@@ -82,6 +82,14 @@ class ImportData:
             """, (self.conn.database, tbl_name))
         return [row[0] for row in self.cursor.fetchall()]
     
+    def get_count_cols(self, tbl_name: str):
+        self.cursor.execute("""
+            SELECT COUNT(*) AS column_count
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            """, (self.conn.database, tbl_name))
+        return self.cursor.fetchone()[0]
+    
     def bulk_import(self, folder_path):
         try:
             ms_alert(f"🆗[INFO] \nStart import file(s)")
@@ -108,8 +116,13 @@ class ImportData:
                     prev= None
                 else:
                     if prev:
-                        lines.append(prev + current_record)
-                        prev = None
+                        if prev.count(delimiter) + current_record.count(delimiter) == expected_columns - 1:
+                            lines.append(prev + current_record)
+                            prev = None
+                        else:
+                            current_record += '\\n'
+                            prev += current_record
+
                     else:
                         current_record += '\\n'
                         prev = current_record
