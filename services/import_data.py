@@ -1,10 +1,10 @@
 import pandas as pd
-import numpy as np
 import mysql.connector
 import os
 import gc
 from services.notify import ms_alert
 from database import get_conn, close_conn
+from io import StringIO
 
 
 class ImportData:
@@ -15,12 +15,12 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename):
         try:
+            df = self.preprocess_and_load(file_path)
             tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
-            df = pd.read_csv(file_path, dtype=str, delimiter='|', low_memory=False)
-            df = df.replace({np.nan: None, r'\\n': '\n'}, regex=True)
-            df = df.map(lambda x: '' if x == "''" else x)
+            df = df.replace('[NULL]', None)
+            df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
             ms_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
             print(f"\n ----------- \n{file_path} loaded successfully from file.")
@@ -95,3 +95,26 @@ class ImportData:
             ms_alert(f"🚨[ERROR] \nError while importing data: {e}")
         finally:
             close_conn(self.conn)
+    
+    def preprocess_and_load(self, file_path, delimiter='|', expected_columns=54):
+        lines = []
+        current_record = ""
+
+        with open(file_path, mode='r', encoding='utf-8') as file:
+            for line in file:
+                current_record = line.strip()
+                if current_record.count(delimiter) == expected_columns - 1:
+                    lines.append(current_record)
+                    prev= None
+                else:
+                    if prev:
+                        lines.append(prev + current_record)
+                        prev = None
+                    else:
+                        current_record += '\\n'
+                        prev = current_record
+        
+        data_str = "\n".join(lines)
+        df = pd.read_csv(StringIO(data_str), delimiter='|', keep_default_na=False)
+        return df
+
