@@ -1,5 +1,8 @@
 import os
 import gc
+import gzip
+import shutil
+
 import pandas as pd
 import mysql.connector
 from services.notify import ms_alert
@@ -15,7 +18,9 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename) -> None:
         try:
-            tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[3:-2])
+            tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[:-2])
+            # for specific case on tbl_privilege_txn
+            tbl_name = "tbl_privilege_txn_current" if tbl_name == "tbl_privilege_txn" else tbl_name
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
             df = self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
@@ -43,10 +48,12 @@ class ImportData:
                 if count_all_records == total_records + before_inserted_records:
                     ms_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
                 else:
-                    ms_alert(f"🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
+                    print(f"🚨🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
+                    ms_alert(f"🚨🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
         except mysql.connector.Error as e:
-            print(f"Error while inserting data: {e}")
-            ms_alert(f"🚨[ERROR] \nError connecting to the database or inserting data: {e}")
+            print(f"🚨🚨 Error while inserting data: {e}")
+            ms_alert(f"🚨🚨[ERROR] \nError connecting to the database or inserting data: {e}")
+            raise e
         finally:
             del df
             gc.collect()
@@ -94,13 +101,24 @@ class ImportData:
         try:
             ms_alert(f"🆗[INFO] \nStart import file(s)")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
+            processed_files = []
             for filename in os.listdir(folder_path):
-                self.import_data_to_mysql(os.path.join(folder_path, filename), filename)
+                filepath = os.path.join(folder_path, filename)
+                txt_filename = filename
+                if filename[-3:] == ".gz":
+                    txt_filename = filename[:-3]
+                    with gzip.open(filepath, 'rb') as f_in:
+                        with open(os.path.join(folder_path, txt_filename), 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                if txt_filename not in processed_files:
+                    self.import_data_to_mysql(os.path.join(folder_path, txt_filename), txt_filename)
+                    processed_files.append(txt_filename)
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-            ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅")
+            ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅ processed_files = {processed_files}")
         except Exception as e:
-            print(f"Error: {e}")
-            ms_alert(f"🚨[ERROR] \nError while importing data: {e}")
+            print(f"🚨🚨 Error: {e}")
+            ms_alert(f"🚨🚨[ERROR] \nError while importing data: {e}")
+            raise e
         finally:
             close_conn(self.conn)
     
@@ -126,5 +144,5 @@ class ImportData:
                         prev = current_record
         
         data_str = "\n".join(lines)
-        df = pd.read_csv(StringIO(data_str), delimiter='|', keep_default_na=False)
+        df = pd.read_csv(StringIO(data_str), delimiter='|', keep_default_na=False, low_memory=False)
         return df
