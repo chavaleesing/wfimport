@@ -2,6 +2,7 @@ import os
 import gc
 import gzip
 import shutil
+import time
 
 import pandas as pd
 import mysql.connector
@@ -48,15 +49,16 @@ class ImportData:
                 if count_all_records == total_records + before_inserted_records:
                     ms_alert(f"🆗[INFO][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
                 else:
-                    print(f"🚨🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
-                    ms_alert(f"🚨🚨[ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
+                    print(f"\n🚨 🚨 🚨 [ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
+                    ms_alert(f"🚨 🚨 🚨 [ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
         except mysql.connector.Error as e:
-            print(f"🚨🚨 Error while inserting data: {e}")
-            ms_alert(f"🚨🚨[ERROR] \nError connecting to the database or inserting data: {e}")
+            print(f"\n🚨 🚨 🚨  Error while inserting data: {e}")
+            ms_alert(f"🚨 🚨 🚨 [ERROR] \nError connecting to the database or inserting data: {e}")
             raise e
         finally:
             del df
             gc.collect()
+            time.sleep(1)
 
     def replace_empty_str(self, df, tbl_name) -> pd.DataFrame:
         notnull_cols = self.get_notnull_cols(tbl_name=tbl_name)
@@ -113,14 +115,28 @@ class ImportData:
                 if txt_filename not in processed_files:
                     self.import_data_to_mysql(os.path.join(folder_path, txt_filename), txt_filename)
                     processed_files.append(txt_filename)
+                    self.remove_processed_file(os.path.join(folder_path, txt_filename))
+                    self.remove_processed_file(os.path.join(folder_path, txt_filename + ".gz"))
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
             ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅ processed_files = {processed_files}")
         except Exception as e:
-            print(f"🚨🚨 Error: {e}")
-            ms_alert(f"🚨🚨[ERROR] \nError while importing data: {e}")
+            print(f"\n🚨 🚨 🚨  Error: {e}")
+            ms_alert(f"🚨 🚨 🚨 [ERROR] \nError while importing data: {e}")
             raise e
         finally:
             close_conn(self.conn)
+
+    def remove_processed_file(self, file_path):
+        try:
+            os.remove(file_path)
+            print(f"File {file_path} has been removed successfully.")
+        except FileNotFoundError:
+            print(f"Error: The file {file_path} does not exist.")
+        except PermissionError:
+            print(f"Error: You do not have permission to delete the file {file_path}.")
+        except Exception as e:
+            print(f"Error: {e}")
+
     
     def preprocess_and_load(self, file_path, delimiter, expected_columns) -> pd.DataFrame:
         lines = []
