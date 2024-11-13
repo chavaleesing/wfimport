@@ -5,10 +5,8 @@ import shutil
 import time
 
 import pandas as pd
-import mysql.connector
 from services.notify import ms_alert
 from database import get_conn, close_conn
-from io import StringIO
 
 
 class ImportData:
@@ -17,31 +15,46 @@ class ImportData:
         self.conn = get_conn()
         self.cursor = self.conn.cursor()
 
+    def get_preprocessed_file_path(self, file_path):
+        list_paths = file_path.split("/")
+        list_paths.insert(2, "preprocessed")
+        preprocessed_file_path = os.path.join(*list_paths)
+        return preprocessed_file_path
+
     def import_data_to_mysql(self, file_path, filename) -> None:
         try:
+            df = None
             tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[:-2])
             # for specific case on tbl_privilege_txn
             tbl_name = "tbl_privilege_txn_current" if tbl_name == "tbl_privilege_txn" else tbl_name
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
-            df = self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
+
+            if "preprocessed" in file_path:
+                preprocessed_file_path = file_path
+            else:
+                self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
+                preprocessed_file_path = self.get_preprocessed_file_path(file_path)
+            
+            df = pd.read_csv(preprocessed_file_path, delimiter='|', keep_default_na=False, low_memory=False)
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
             ms_alert(f"🆗[INFO] \nImporting data from file {filename} \n\nTotal records = {total_records}")
-            print(f"\n ----------- \n{file_path} loaded successfully from file.")
+            print(f"\n ----------- \n{preprocessed_file_path} loaded successfully from file.")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
             commited_reocrds = 0
             batch_size = int(os.getenv("BATCH_SIZE", 10000))
-            
+
             for start in range(0, total_records, batch_size):
                 batch_data = [tuple(row) for row in df[start:start+batch_size].values]
                 self.cursor.executemany(sql, batch_data)
                 self.conn.commit()
                 commited_reocrds += len(batch_data)
                 print(f"{commited_reocrds} records imported successfully into the MySQL database.")
+                # time.sleep(10)
             print(f"Data imported successfully into the MySQL database.")
             
             if int(os.getenv("IS_RECONCILE", 0)):
@@ -51,14 +64,25 @@ class ImportData:
                 else:
                     print(f"\n🚨 🚨 🚨 [ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
                     ms_alert(f"🚨 🚨 🚨 [ERROR][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
-        except mysql.connector.Error as e:
+        except Exception as e:
             print(f"\n🚨 🚨 🚨  Error while inserting data: {e}")
             ms_alert(f"🚨 🚨 🚨 [ERROR] \nError connecting to the database or inserting data: {e}")
+            self.fix_error_file(preprocessed_file_path, filename, commited_reocrds)
             raise e
         finally:
             del df
             gc.collect()
             time.sleep(1)
+
+    def fix_error_file(self, preprocessed_file_path, filename, inserted_record) -> None:
+        with open(preprocessed_file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+        lines_to_keep = lines[:1] + lines[inserted_record+1:]
+        directory = os.path.dirname(preprocessed_file_path)
+        edited_preprocessed_file_path = os.path.join(directory, filename.split(".")[0] + f"edit{time.strftime('%H%M%S', time.localtime())}.txt")
+        with open(edited_preprocessed_file_path, 'w', encoding='utf-8') as file:
+            file.writelines(lines_to_keep)
+        self.remove_processed_file(preprocessed_file_path)
 
     def replace_empty_str(self, df, tbl_name) -> pd.DataFrame:
         notnull_cols = self.get_notnull_cols(tbl_name=tbl_name)
@@ -106,17 +130,32 @@ class ImportData:
             processed_files = []
             for filename in os.listdir(folder_path):
                 filepath = os.path.join(folder_path, filename)
+                if os.path.isfile(filepath):
+                    txt_filename = filename
+                    # Depress .gz
+                    if filename[-3:] == ".gz":
+                        txt_filename = filename[:-3]
+                        with gzip.open(filepath, 'rb') as f_in:
+                            with open(os.path.join(folder_path, txt_filename), 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                                self.remove_processed_file(os.path.join(folder_path, filename))
+                    if txt_filename not in processed_files:
+                        # process file
+                        file_path = os.path.join(folder_path, txt_filename)
+                        self.import_data_to_mysql(file_path, txt_filename)
+                        processed_files.append(txt_filename)
+                        self.add_success_file(txt_filename)
+                        self.remove_processed_file(self.get_preprocessed_file_path(file_path))
+            
+            pre_folder_path = folder_path + "/preprocessed"
+            for filename in os.listdir(pre_folder_path):
                 txt_filename = filename
-                if filename[-3:] == ".gz":
-                    txt_filename = filename[:-3]
-                    with gzip.open(filepath, 'rb') as f_in:
-                        with open(os.path.join(folder_path, txt_filename), 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                if txt_filename not in processed_files:
-                    self.import_data_to_mysql(os.path.join(folder_path, txt_filename), txt_filename)
-                    processed_files.append(txt_filename)
-                    self.remove_processed_file(os.path.join(folder_path, txt_filename))
-                    self.remove_processed_file(os.path.join(folder_path, txt_filename + ".gz"))
+                file_path = os.path.join(pre_folder_path, txt_filename)
+                self.import_data_to_mysql(file_path, txt_filename)
+                processed_files.append(txt_filename)
+                self.add_success_file(txt_filename)
+                self.remove_processed_file(file_path)
+                           
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
             ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅ processed_files = {processed_files}")
         except Exception as e:
@@ -125,6 +164,10 @@ class ImportData:
             raise e
         finally:
             close_conn(self.conn)
+
+    def add_success_file(self, filename):
+        with open('success_file_list.txt', 'a', encoding='utf-8') as file:
+            file.write(filename + "\n")
 
     def remove_processed_file(self, file_path):
         try:
@@ -138,7 +181,7 @@ class ImportData:
             print(f"Error: {e}")
 
     
-    def preprocess_and_load(self, file_path, delimiter, expected_columns) -> pd.DataFrame:
+    def preprocess_and_load(self, file_path, delimiter, expected_columns):
         lines = []
         current_record = ""
         with open(file_path, mode='r', encoding='utf-8') as file:
@@ -160,5 +203,9 @@ class ImportData:
                         prev = current_record
         
         data_str = "\n".join(lines)
-        df = pd.read_csv(StringIO(data_str), delimiter='|', keep_default_na=False, low_memory=False)
-        return df
+        preprocessed_file_path = self.get_preprocessed_file_path(file_path)
+        os.makedirs(os.path.dirname(preprocessed_file_path), exist_ok=True)
+        with open(preprocessed_file_path, 'w') as file:
+            file.write(data_str)
+
+        self.remove_processed_file(file_path)
