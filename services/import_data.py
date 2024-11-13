@@ -1,7 +1,7 @@
-import pandas as pd
-import mysql.connector
 import os
 import gc
+import pandas as pd
+import mysql.connector
 from services.notify import ms_alert
 from database import get_conn, close_conn
 from io import StringIO
@@ -13,12 +13,12 @@ class ImportData:
         self.conn = get_conn()
         self.cursor = self.conn.cursor()
 
-    def import_data_to_mysql(self, file_path, filename):
+    def import_data_to_mysql(self, file_path, filename) -> None:
         try:
             tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[3:-2])
             if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
-            df = self.preprocess_and_load(file_path, "|", self.get_count_cols(tbl_name))
+            df = self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
@@ -51,13 +51,13 @@ class ImportData:
             del df
             gc.collect()
 
-    def replace_empty_str(self, df, tbl_name):
+    def replace_empty_str(self, df, tbl_name) -> pd.DataFrame:
         notnull_cols = self.get_notnull_cols(tbl_name=tbl_name)
         for col in notnull_cols:
             df[col] = df[col].fillna("")
         return df
 
-    def get_col_convert_col_str(self, tbl_name: str):
+    def get_col_convert_col_str(self, tbl_name: str) -> dict:
         mapping = {
             "tbl_customers": ["tn_auth_flag"],
             "tbl_customers_audit": ["tn_auth_flag"],
@@ -74,7 +74,7 @@ class ImportData:
             return result[0]
         return 0
     
-    def get_notnull_cols(self, tbl_name: str):
+    def get_notnull_cols(self, tbl_name: str) -> list:
         self.cursor.execute("""
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
@@ -82,7 +82,7 @@ class ImportData:
             """, (self.conn.database, tbl_name))
         return [row[0] for row in self.cursor.fetchall()]
     
-    def get_count_cols(self, tbl_name: str):
+    def get_count_cols(self, tbl_name: str) -> int:
         self.cursor.execute("""
             SELECT COUNT(*) AS column_count
             FROM INFORMATION_SCHEMA.COLUMNS
@@ -90,7 +90,7 @@ class ImportData:
             """, (self.conn.database, tbl_name))
         return self.cursor.fetchone()[0]
     
-    def bulk_import(self, folder_path):
+    def bulk_import(self, folder_path) -> None:
         try:
             ms_alert(f"🆗[INFO] \nStart import file(s)")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
@@ -104,10 +104,9 @@ class ImportData:
         finally:
             close_conn(self.conn)
     
-    def preprocess_and_load(self, file_path, delimiter='|', expected_columns=54):
+    def preprocess_and_load(self, file_path, delimiter, expected_columns) -> pd.DataFrame:
         lines = []
         current_record = ""
-
         with open(file_path, mode='r', encoding='utf-8') as file:
             for line in file:
                 current_record = line.strip()
@@ -122,7 +121,6 @@ class ImportData:
                         else:
                             current_record += '\\n'
                             prev += current_record
-
                     else:
                         current_record += '\\n'
                         prev = current_record
@@ -130,4 +128,3 @@ class ImportData:
         data_str = "\n".join(lines)
         df = pd.read_csv(StringIO(data_str), delimiter='|', keep_default_na=False)
         return df
-
