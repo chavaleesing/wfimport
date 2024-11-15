@@ -4,7 +4,8 @@ import gzip
 import shutil
 import time
 import uuid
-from datetime import datetime
+
+from datetime import datetime, time as dtime
 
 import pandas as pd
 from services.notify import ms_alert
@@ -17,6 +18,7 @@ class ImportData:
         self.conn = get_conn()
         self.cursor = self.conn.cursor()
         self.unique_key = str(uuid.uuid4())[:8]
+        self.all_counts = 0
 
     def get_preprocessed_file_path(self, file_path):
         list_paths = file_path.split("/")
@@ -43,8 +45,8 @@ class ImportData:
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
-            ms_alert(f"🆗[INFO][{self.unique_key}] \nImporting data from file {filename} \n\nTotal records = {total_records}")
-            print(f"\n ----------- \n[{self.unique_key}][{datetime.now()}] {preprocessed_file_path} loaded successfully from file.")
+            print('- - - - - -')
+            ms_alert(f"🆗[INFO][{self.unique_key}] Importing data from file {filename} | Total records = {total_records}")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
@@ -56,16 +58,16 @@ class ImportData:
                 self.cursor.executemany(sql, batch_data)
                 self.conn.commit()
                 commited_reocrds += len(batch_data)
-                print(f"[{self.unique_key}][{datetime.now()}] {commited_reocrds} records imported successfully")
-            print(f"[{self.unique_key}][{datetime.now()}] Data imported successfully into the MySQL database.")
+                self.all_counts += commited_reocrds
+                print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
+            print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] Data imported successfully into the MySQL database.")
             
             if int(os.getenv("IS_RECONCILE", 1)):
                 count_all_records = self.get_count_records(tbl_name)
                 if count_all_records == total_records + before_inserted_records:
-                    ms_alert(f"🆗[INFO][{self.unique_key}][RECONCILATION] \nAll record on file: {filename} has been inserted \n\nTotal records = {total_records}")
+                    ms_alert(f"🆗[INFO][{self.unique_key}][RECONCILATION] All record on file: {filename} has been inserted | Total records = {total_records} (all_counts={self.all_counts})")
                 else:
-                    print(f"\n🚨 🚨 🚨 [ERROR][{self.unique_key}][{datetime.now()}][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
-                    ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
+                    ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}][RECONCILATION] {count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
                     raise Exception("RECONCILATION ERROR")
         except Exception as e:
             self.fix_error_file(preprocessed_file_path, filename, commited_reocrds)
@@ -76,7 +78,7 @@ class ImportData:
             time.sleep(1)
 
     def fix_error_file(self, preprocessed_file_path, filename, inserted_record) -> None:
-        ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] \nFixing file: {filename}")
+        ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Fixing file: {filename}")
         with open(preprocessed_file_path, 'r', encoding='utf-8') as file:
             lines = file.readlines()
         lines_to_keep = lines[:1] + lines[inserted_record+1:]
@@ -125,12 +127,24 @@ class ImportData:
             """, (self.conn.database, tbl_name))
         return self.cursor.fetchone()[0]
     
+    def is_exceed_time(self) -> bool:
+        # Validate time NOT between 23:00 - 04:00 => this will return True
+        current_time = datetime.now().time()
+        start_time = dtime(23, 0)  # 5:00 PM
+        end_time = dtime(4, 0)     # 4:00 AM
+        is_exceed = not(start_time <= current_time or current_time < end_time)
+        return not is_exceed
+    
     def bulk_import(self, folder_path) -> None:
         try:
-            ms_alert(f"🆗[INFO][{self.unique_key}] \nStart import file(s)")
+            ms_alert(f"🆗[INFO][{self.unique_key}] ⁍ ⁍ ⁍ ⁍ ⁍ Start import file(s) ⁌ ⁌ ⁌ ⁌ ⁌")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
             processed_files = []
             for filename in os.listdir(folder_path):
+                if self.is_exceed_time():
+                    ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
+                    # print(f"🆗[INFO][{self.unique_key}][{datetime.now()}] \nExceed time process")
+                    break
                 filepath = os.path.join(folder_path, filename)
                 if os.path.isfile(filepath):
                     txt_filename = filename
@@ -149,9 +163,14 @@ class ImportData:
                         self.add_success_file(txt_filename)
                         self.remove_processed_file(self.get_preprocessed_file_path(file_path))
             
+            # Rerun fixed files on path preprocessed
             pre_folder_path = folder_path + "/preprocessed"
             if os.path.exists(pre_folder_path):
                 for filename in os.listdir(pre_folder_path):
+                    if self.is_exceed_time():
+                        ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
+                        # print(f"🆗[INFO][{self.unique_key}][{datetime.now()}] \nExceed time process")
+                        break
                     txt_filename = filename
                     file_path = os.path.join(pre_folder_path, txt_filename)
                     self.import_data_to_mysql(file_path, txt_filename)
@@ -160,10 +179,9 @@ class ImportData:
                     self.remove_processed_file(file_path)
                            
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-            ms_alert(f"🆗[INFO][{self.unique_key}] \nCompleted import file(s) ✅ processed_files = {processed_files}")
+            ms_alert(f"🆗[INFO][{self.unique_key}] Completed import file(s) ✅ processed_files = {processed_files}")
         except Exception as e:
-            print(f"\n🚨 🚨 🚨 [{self.unique_key}][{datetime.now()}] Error: {e}")
-            ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] \nError while importing data: {e}")
+            ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Error while importing data: {e}")
             raise e
         finally:
             close_conn(self.conn)
@@ -175,7 +193,6 @@ class ImportData:
     def remove_processed_file(self, file_path):
         try:
             os.remove(file_path)
-            print(f"File {file_path} has been removed successfully.")
         except FileNotFoundError:
             print(f"Error: The file {file_path} does not exist.")
         except PermissionError:

@@ -7,11 +7,10 @@ def get_conn():
         pool = pooling.MySQLConnectionPool(
             pool_name="poolwf",
             pool_size=5,
-            host=os.getenv("HOST"),
-            user=os.getenv("USER"),
-            password=os.getenv("PASSWORD"),
-            database=os.getenv("DATABASE"),
-            allow_local_infile=True
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DATABASE")
         )
         connection = pool.get_connection()
         print("Database connection established.")
