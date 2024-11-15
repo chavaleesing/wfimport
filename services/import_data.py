@@ -3,6 +3,7 @@ import gc
 import gzip
 import shutil
 import time
+from datetime import datetime
 
 import pandas as pd
 from services.notify import ms_alert
@@ -165,9 +166,9 @@ class ImportData:
         finally:
             close_conn(self.conn)
 
-    def add_success_file(self, filename):
+    def add_success_file(self, filename) -> None:
         with open('success_file_list.txt', 'a', encoding='utf-8') as file:
-            file.write(filename + "\n")
+            file.write(f"[{datetime.now()}] - {filename} \n")
 
     def remove_processed_file(self, file_path):
         try:
