@@ -49,7 +49,7 @@ class ImportData:
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
             commited_reocrds = 0
-            batch_size = int(os.getenv("BATCH_SIZE", 10000))
+            batch_size = int(os.getenv("BATCH_SIZE", 20000))
 
             for start in range(0, total_records, batch_size):
                 batch_data = [tuple(row) for row in df[start:start+batch_size].values]
@@ -68,8 +68,6 @@ class ImportData:
                     ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}][RECONCILATION] \n{count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
                     raise Exception("RECONCILATION ERROR")
         except Exception as e:
-            # print(f"\n🚨 🚨 🚨  Error while inserting data: {e}")
-            # ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] \nError connecting to the database or inserting data: {e}")
             self.fix_error_file(preprocessed_file_path, filename, commited_reocrds)
             raise e
         finally:

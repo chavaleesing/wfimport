@@ -37,3 +37,8 @@ python3 main.py
 ```
 pip3 freeze > requirements.txt
 ```
+
+### To remove cache
+```
+find . -name '__pycache__' -type d -exec rm -r {} +
+```
