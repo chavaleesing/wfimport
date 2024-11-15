@@ -149,13 +149,14 @@ class ImportData:
                         self.remove_processed_file(self.get_preprocessed_file_path(file_path))
             
             pre_folder_path = folder_path + "/preprocessed"
-            for filename in os.listdir(pre_folder_path):
-                txt_filename = filename
-                file_path = os.path.join(pre_folder_path, txt_filename)
-                self.import_data_to_mysql(file_path, txt_filename)
-                processed_files.append(txt_filename)
-                self.add_success_file(txt_filename)
-                self.remove_processed_file(file_path)
+            if os.path.exists(pre_folder_path):
+                for filename in os.listdir(pre_folder_path):
+                    txt_filename = filename
+                    file_path = os.path.join(pre_folder_path, txt_filename)
+                    self.import_data_to_mysql(file_path, txt_filename)
+                    processed_files.append(txt_filename)
+                    self.add_success_file(txt_filename)
+                    self.remove_processed_file(file_path)
                            
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
             ms_alert(f"🆗[INFO] \nCompleted import file(s) ✅ processed_files = {processed_files}")
