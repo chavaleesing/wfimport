@@ -58,7 +58,7 @@ class ImportData:
                 self.cursor.executemany(sql, batch_data)
                 self.conn.commit()
                 commited_reocrds += len(batch_data)
-                self.all_counts += commited_reocrds
+                self.all_counts += len(batch_data)
                 print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
             print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] Data imported successfully into the MySQL database.")
             
@@ -133,7 +133,7 @@ class ImportData:
         start_time = dtime(23, 0)  # 5:00 PM
         end_time = dtime(4, 0)     # 4:00 AM
         is_exceed = not(start_time <= current_time or current_time < end_time)
-        return not is_exceed
+        return is_exceed
     
     def bulk_import(self, folder_path) -> None:
         try:
