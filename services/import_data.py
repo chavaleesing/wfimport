@@ -32,7 +32,7 @@ class ImportData:
             tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[:-2])
             # for specific case on tbl_privilege_txn
             tbl_name = "tbl_privilege_txn_current" if tbl_name == "tbl_privilege_txn" else tbl_name
-            if int(os.getenv("IS_RECONCILE", 1)):
+            if int(os.getenv("IS_RECONCILE", 0)):
                 before_inserted_records = self.get_count_records(tbl_name)
 
             if "preprocessed" in file_path:
@@ -61,8 +61,7 @@ class ImportData:
                 self.all_counts += len(batch_data)
                 print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
             print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] Data imported successfully into the MySQL database.")
-            
-            if int(os.getenv("IS_RECONCILE", 1)):
+            if int(os.getenv("IS_RECONCILE", 0)):
                 count_all_records = self.get_count_records(tbl_name)
                 if count_all_records == total_records + before_inserted_records:
                     ms_alert(f"🆗[INFO][{self.unique_key}][RECONCILATION] All record on file: {filename} has been inserted | Total records = {total_records} (all_counts={self.all_counts})")
@@ -131,7 +130,7 @@ class ImportData:
         # Validate time NOT between 23:00 - 04:00 => this will return True
         current_time = datetime.now().time()
         start_time = dtime(23, 0)  # 5:00 PM
-        end_time = dtime(4, 0)     # 4:00 AM
+        end_time = dtime(3, 30)     # 3:30 AM
         is_exceed = not(start_time <= current_time or current_time < end_time)
         return is_exceed
     
