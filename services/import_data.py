@@ -41,7 +41,7 @@ class ImportData:
                 self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
                 preprocessed_file_path = self.get_preprocessed_file_path(file_path)
             
-            df = pd.read_csv(preprocessed_file_path, delimiter='|', keep_default_na=False, low_memory=False)
+            df = pd.read_csv(preprocessed_file_path, delimiter='|', keep_default_na=False, low_memory=False, dtype=str)
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
