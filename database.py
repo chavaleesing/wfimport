@@ -2,15 +2,18 @@ import os
 from mysql.connector import pooling, Error
 
 
+from dotenv import dotenv_values
+env_vars = dotenv_values(".env")
+
 def get_conn():
     try:
         pool = pooling.MySQLConnectionPool(
             pool_name="poolwf",
             pool_size=5,
-            host=os.getenv("DB_HOST"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DATABASE")
+            host=env_vars["DB_HOST"],
+            user=env_vars["DB_USER"],
+            password=env_vars["DB_PASSWORD"],
+            database=env_vars["DATABASE"]
         )
         connection = pool.get_connection()
         print("Database connection established.")

@@ -40,5 +40,6 @@ pip3 freeze > requirements.txt
 
 ### To remove cache
 ```
-find . -name '__pycache__' -type d -exec rm -r {} +
+find . -name '__pycache__' -type d -exec rm -r {} + &&
+find . -name ".DS_Store" -delete
 ```

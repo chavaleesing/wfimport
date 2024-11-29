@@ -11,6 +11,8 @@ import pandas as pd
 from services.notify import ms_alert
 from database import get_conn, close_conn
 
+from dotenv import dotenv_values
+env_vars = dotenv_values(".env")
 
 class ImportData:
 
@@ -28,31 +30,25 @@ class ImportData:
 
     def import_data_to_mysql(self, file_path, filename) -> None:
         try:
+            preprocessed_file_path = None
+            commited_reocrds = 0
             df = None
-            tbl_name = os.getenv("TABLE_NAME", None) or "_".join(filename.split("_")[:-2])
-            # for specific case on tbl_privilege_txn
-            tbl_name = "tbl_privilege_txn_current" if tbl_name == "tbl_privilege_txn" else tbl_name
-            if int(os.getenv("IS_RECONCILE", 0)):
-                before_inserted_records = self.get_count_records(tbl_name)
-
+            tbl_name = "_".join(filename.split("_")[:-2])
             if "preprocessed" in file_path:
                 preprocessed_file_path = file_path
             else:
                 self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
                 preprocessed_file_path = self.get_preprocessed_file_path(file_path)
-            
+            print(" - - - - - - ")
             df = pd.read_csv(preprocessed_file_path, delimiter='|', keep_default_na=False, low_memory=False, dtype=str)
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
-            print('- - - - - -')
             ms_alert(f"🆗[INFO][{self.unique_key}] Importing data from file {filename} | Total records = {total_records}")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
-            commited_reocrds = 0
-            batch_size = int(os.getenv("BATCH_SIZE", 20000))
-
+            batch_size = int(env_vars["BATCH_SIZE"])
             for start in range(0, total_records, batch_size):
                 batch_data = [tuple(row) for row in df[start:start+batch_size].values]
                 self.cursor.executemany(sql, batch_data)
@@ -60,14 +56,6 @@ class ImportData:
                 commited_reocrds += len(batch_data)
                 self.all_counts += len(batch_data)
                 print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
-            print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] Data imported successfully into the MySQL database.")
-            if int(os.getenv("IS_RECONCILE", 0)):
-                count_all_records = self.get_count_records(tbl_name)
-                if count_all_records == total_records + before_inserted_records:
-                    ms_alert(f"🆗[INFO][{self.unique_key}][RECONCILATION] All record on file: {filename} has been inserted | Total records = {total_records} (all_counts={self.all_counts})")
-                else:
-                    ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}][RECONCILATION] {count_all_records} != {total_records} + {before_inserted_records} on file: {filename}")
-                    raise Exception("RECONCILATION ERROR")
         except Exception as e:
             self.fix_error_file(preprocessed_file_path, filename, commited_reocrds)
             raise e
@@ -77,15 +65,18 @@ class ImportData:
             time.sleep(1)
 
     def fix_error_file(self, preprocessed_file_path, filename, inserted_record) -> None:
-        ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Fixing file: {filename}")
-        with open(preprocessed_file_path, 'r', encoding='utf-8') as file:
-            lines = file.readlines()
-        lines_to_keep = lines[:1] + lines[inserted_record+1:]
-        directory = os.path.dirname(preprocessed_file_path)
-        edited_preprocessed_file_path = os.path.join(directory, filename.split(".")[0] + f"edit{time.strftime('%H%M%S', time.localtime())}.txt")
-        with open(edited_preprocessed_file_path, 'w', encoding='utf-8') as file:
-            file.writelines(lines_to_keep)
-        self.remove_processed_file(preprocessed_file_path)
+        try:
+            ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Fixing file: {filename}")
+            with open(preprocessed_file_path, 'r', encoding='utf-8') as file:
+                lines = file.readlines()
+            lines_to_keep = lines[:1] + lines[inserted_record+1:]
+            directory = os.path.dirname(preprocessed_file_path)
+            edited_preprocessed_file_path = os.path.join(directory, filename.split(".")[0] + f"edit{time.strftime('%H%M%S', time.localtime())}.txt")
+            with open(edited_preprocessed_file_path, 'w', encoding='utf-8') as file:
+                file.writelines(lines_to_keep)
+            self.remove_processed_file(preprocessed_file_path)
+        except Exception as e:
+            print(f"Cannot fixed file {filename} as {e}")
 
     def replace_empty_str(self, df, tbl_name) -> pd.DataFrame:
         notnull_cols = self.get_notnull_cols(tbl_name=tbl_name)
@@ -124,7 +115,9 @@ class ImportData:
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             """, (self.conn.database, tbl_name))
-        return self.cursor.fetchone()[0]
+        col_count = self.cursor.fetchone()[0]
+        print(f"cols on `{tbl_name}` = {col_count}")
+        return col_count
     
     def is_exceed_time(self) -> bool:
         # Validate time NOT between 23:00 - 04:00 => this will return True
@@ -142,7 +135,6 @@ class ImportData:
             for filename in os.listdir(folder_path):
                 if self.is_exceed_time():
                     ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
-                    # print(f"🆗[INFO][{self.unique_key}][{datetime.now()}] \nExceed time process")
                     break
                 filepath = os.path.join(folder_path, filename)
                 if os.path.isfile(filepath):
@@ -168,7 +160,6 @@ class ImportData:
                 for filename in os.listdir(pre_folder_path):
                     if self.is_exceed_time():
                         ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
-                        # print(f"🆗[INFO][{self.unique_key}][{datetime.now()}] \nExceed time process")
                         break
                     txt_filename = filename
                     file_path = os.path.join(pre_folder_path, txt_filename)
@@ -203,9 +194,18 @@ class ImportData:
     def preprocess_and_load(self, file_path, delimiter, expected_columns):
         lines = []
         current_record = ""
+        prev = None
         with open(file_path, mode='r', encoding='utf-8') as file:
+            i = 0
             for line in file:
                 current_record = line.strip()
+                if i == 0:
+                    print(f"file:{file_path}, delimeter_count = {current_record.count(delimiter)}, expected_columns = {expected_columns}")
+                    if current_record.count(delimiter) != expected_columns - 1:
+                        print("Columns header on csv != column on DB")
+                        raise Exception("Columns header on csv != Columns on DB")
+                if i % 10000 == 0:
+                    print(f"\rpreprocessing {i}", flush=True, end="")
                 if current_record.count(delimiter) == expected_columns - 1:
                     lines.append(current_record)
                     prev= None
@@ -220,11 +220,12 @@ class ImportData:
                     else:
                         current_record += '\\n'
                         prev = current_record
+                i += 1
+                
         
         data_str = "\n".join(lines)
         preprocessed_file_path = self.get_preprocessed_file_path(file_path)
         os.makedirs(os.path.dirname(preprocessed_file_path), exist_ok=True)
         with open(preprocessed_file_path, 'w') as file:
             file.write(data_str)
-
         self.remove_processed_file(file_path)
