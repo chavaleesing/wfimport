@@ -1,4 +1,3 @@
-import os
 from mysql.connector import pooling, Error
 
 

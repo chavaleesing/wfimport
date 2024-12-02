@@ -34,17 +34,17 @@ class ImportData:
             commited_reocrds = 0
             df = None
             tbl_name = "_".join(filename.split("_")[:-2])
+            ms_alert(f"[INFO][{self.unique_key}] - - - Start file {filename}, table={tbl_name} - - -")
             if "preprocessed" in file_path:
                 preprocessed_file_path = file_path
             else:
                 self.preprocess_and_load(file_path=file_path, delimiter="|", expected_columns=self.get_count_cols(tbl_name))
                 preprocessed_file_path = self.get_preprocessed_file_path(file_path)
-            print(" - - - - - - ")
             df = pd.read_csv(preprocessed_file_path, delimiter='|', keep_default_na=False, low_memory=False, dtype=str)
             df = df.replace('[NULL]', None)
             df = df.replace(r'\\n', '\n', regex=True)
             total_records = len(df)
-            ms_alert(f"🆗[INFO][{self.unique_key}] Importing data from file {filename} | Total records = {total_records}")
+            ms_alert(f"[INFO][{self.unique_key}] Importing data from file {filename}, table={tbl_name} | Total records = {total_records}")
             placeholders = ', '.join(['%s'] * len(df.columns))
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
@@ -116,25 +116,24 @@ class ImportData:
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             """, (self.conn.database, tbl_name))
         col_count = self.cursor.fetchone()[0]
-        print(f"cols on `{tbl_name}` = {col_count}")
         return col_count
     
     def is_exceed_time(self) -> bool:
-        # Validate time NOT between 23:00 - 04:00 => this will return True
+        # Validate time, If NOT between 23:00 - 03:30 => this will return True
         current_time = datetime.now().time()
-        start_time = dtime(23, 0)  # 5:00 PM
-        end_time = dtime(3, 30)     # 3:30 AM
+        start_time = dtime(23, 0)  # 11:00 PM
+        end_time = dtime(3, 30)    # 3:30 AM
         is_exceed = not(start_time <= current_time or current_time < end_time)
         return is_exceed
     
     def bulk_import(self, folder_path) -> None:
         try:
-            ms_alert(f"🆗[INFO][{self.unique_key}] ⁍ ⁍ ⁍ ⁍ ⁍ Start import file(s) ⁌ ⁌ ⁌ ⁌ ⁌")
+            ms_alert(f"[INFO][{self.unique_key}] ⁍ ⁍ ⁍ ⁍ ⁍ Start import file(s) on {folder_path} ⁌ ⁌ ⁌ ⁌ ⁌")
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
             processed_files = []
             for filename in os.listdir(folder_path):
                 if self.is_exceed_time():
-                    ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
+                    ms_alert(f"[INFO][{self.unique_key}] Exceed time process")
                     break
                 filepath = os.path.join(folder_path, filename)
                 if os.path.isfile(filepath):
@@ -159,7 +158,7 @@ class ImportData:
             if os.path.exists(pre_folder_path):
                 for filename in os.listdir(pre_folder_path):
                     if self.is_exceed_time():
-                        ms_alert(f"🆗[INFO][{self.unique_key}] Exceed time process")
+                        ms_alert(f"[INFO][{self.unique_key}] Exceed time process")
                         break
                     txt_filename = filename
                     file_path = os.path.join(pre_folder_path, txt_filename)
@@ -169,7 +168,7 @@ class ImportData:
                     self.remove_processed_file(file_path)
                            
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
-            ms_alert(f"🆗[INFO][{self.unique_key}] Completed import file(s) ✅ processed_files = {processed_files}")
+            ms_alert(f"[INFO][{self.unique_key}] Completed import file(s) ✅ processed_files = {processed_files}")
         except Exception as e:
             ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Error while importing data: {e}")
             raise e
@@ -183,14 +182,9 @@ class ImportData:
     def remove_processed_file(self, file_path):
         try:
             os.remove(file_path)
-        except FileNotFoundError:
-            print(f"Error: The file {file_path} does not exist.")
-        except PermissionError:
-            print(f"Error: You do not have permission to delete the file {file_path}.")
         except Exception as e:
             print(f"Error: {e}")
 
-    
     def preprocess_and_load(self, file_path, delimiter, expected_columns):
         lines = []
         current_record = ""
@@ -200,11 +194,11 @@ class ImportData:
             for line in file:
                 current_record = line.strip()
                 if i == 0:
-                    print(f"file:{file_path}, delimeter_count = {current_record.count(delimiter)}, expected_columns = {expected_columns}")
+                    ms_alert(f"[INFO][{self.unique_key}] Preprocessing file:{file_path}, delimeter_count = {current_record.count(delimiter)}, expected_columns = {expected_columns}")
                     if current_record.count(delimiter) != expected_columns - 1:
-                        print("Columns header on csv != column on DB")
+                        ms_alert("Columns header on csv != column on DB")
                         raise Exception("Columns header on csv != Columns on DB")
-                if i % 10000 == 0:
+                if i % 100000 == 0:
                     print(f"\rpreprocessing {i}", flush=True, end="")
                 if current_record.count(delimiter) == expected_columns - 1:
                     lines.append(current_record)
@@ -222,10 +216,10 @@ class ImportData:
                         prev = current_record
                 i += 1
                 
-        
         data_str = "\n".join(lines)
         preprocessed_file_path = self.get_preprocessed_file_path(file_path)
         os.makedirs(os.path.dirname(preprocessed_file_path), exist_ok=True)
         with open(preprocessed_file_path, 'w') as file:
             file.write(data_str)
         self.remove_processed_file(file_path)
+        print()
