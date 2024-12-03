@@ -24,7 +24,7 @@ DATABASE=
 ## 3. Move import files 
 #### 3.1 create folder 
 ```
-mkdir data && cd data && mkdir campaign company credit customer payment
+mkdir -p data && cd data && mkdir -p campaign company credit customer payment && cd .. 
 ```
 #### 3.2 prepare import files to folder 
 format file must be `tbl_privilege_txn_202XXX_XX.txt.gz` to folder `data/<DB>`

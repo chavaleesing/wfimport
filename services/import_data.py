@@ -33,7 +33,7 @@ class ImportData:
             preprocessed_file_path = None
             commited_reocrds = 0
             df = None
-            tbl_name = "_".join(filename.split("_")[:-2])
+            tbl_name = "_".join(filename.split("_")[:-2]) + "_temp"
             ms_alert(f"[INFO][{self.unique_key}] - - - Start file {filename}, table={tbl_name} - - -")
             if "preprocessed" in file_path:
                 preprocessed_file_path = file_path
