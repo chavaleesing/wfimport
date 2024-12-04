@@ -63,6 +63,16 @@ class Helper:
         return col_count
     
     @staticmethod
+    def get_cols_name(conn, cursor, tbl_name: str) -> list:
+        cursor.execute("""
+            SELECT COLUMN_NAME AS column_count
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            """, (conn.database, tbl_name))
+        cols_name = cursor.fetchall()
+        return [row[0] for row in cols_name]
+    
+    @staticmethod
     def preprocess_and_load(unique_key, file_path, delimiter, expected_columns):
         lines = []
         current_record = ""

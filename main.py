@@ -10,7 +10,8 @@ if len(sys.argv) == 3:
     if sys.argv[1] == "import":
         ImportData().bulk_import(sys.argv[2])
     elif sys.argv[1] == "update":
-        UpdateData().bulk_update(sys.argv[2])
+        UpdateData().update_data_to_mysql()
+        # UpdateData().bulk_update(sys.argv[2])
     else:
         print("Pls run script in format `python3 main.py <import/update> data/<folder_name>`")
 else:
