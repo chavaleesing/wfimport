@@ -5,11 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Import data",
             "type": "debugpy",
             "request": "launch",
             "program": "main.py",
-            "args": ["update", "data/company"],
+            "args": ["data/company"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Update data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "args": ["update"],
             "console": "integratedTerminal"
         }
     ]
