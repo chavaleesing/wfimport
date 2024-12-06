@@ -27,7 +27,6 @@ class UpdateData:
                 tbl_name = tbl_main +   "_temp"
                 if env_vars.get("UPDATE_CONDITION_MAPPING"):
                     update_condition_mapping = json.loads(env_vars.get("UPDATE_CONDITION_MAPPING"))
-                    print(update_condition_mapping.keys())
                     col_cond = f" {update_condition_mapping.get(tbl_main)} is NULL"
                 identifier_column = "id"
                 all_cols = Helper.get_cols_name(self.conn, self.cursor, tbl_name)

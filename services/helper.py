@@ -23,7 +23,6 @@ class Helper:
 
     @staticmethod
     def is_exceed_time() -> bool:
-        return False
         # Validate time, If NOT between 23:00 - 03:30 => this will return True
         current_time = datetime.now().time()
         start_time = dtime(23, 0)  # 11:00 PM
