@@ -21,8 +21,10 @@ class UpdateData:
     def update_data_to_mysql(self) -> None:
         try:
             tbl_mains = env_vars["UPDATE_TABLES"].split(",")
+            completed_tbl = []
             for tbl_main in tbl_mains:
-                if Helper.is_exceed_time():
+                ms_alert(f"[INFO][{self.unique_key}] Updating data table: {tbl_main}")
+                if Helper.is_exceed_time(self.unique_key):
                     break
                 tbl_name = tbl_main +   "_temp"
                 if env_vars.get("UPDATE_CONDITION_MAPPING"):
@@ -35,24 +37,26 @@ class UpdateData:
                 batch_size = int(env_vars["BATCH_SIZE"])
                 is_process_ids = True
                 while is_process_ids:
-                    if Helper.is_exceed_time():
+                    if Helper.is_exceed_time(self.unique_key):
                         break
                     sql_ids = f"SELECT id FROM {tbl_main} WHERE {col_cond} limit {batch_size}"
                     self.cursor.execute(sql_ids)
                     ids = self.cursor.fetchall()
                     id_list = [id_tuple[0] for id_tuple in ids]
                     if not id_list:
+                        completed_tbl.append(tbl_main)
                         is_process_ids = False
                         break
                     id_str = ', '.join([f"'{str(id)}'" for id in id_list])
-                    sql = f"UPDATE {tbl_main} as main JOIN {tbl_name} as temp ON main.id = temp.id SET {set_clause} WHERE main.id IN ({id_str});"
+                    sql = f"UPDATE LOW_PRIORITY {tbl_main} as main JOIN {tbl_name} as temp ON main.id = temp.id SET {set_clause} WHERE main.id IN ({id_str});"
                     self.cursor.execute(sql)
                     updated_rows = self.cursor.rowcount
                     self.conn.commit()
                     self.all_counts += updated_rows
-                    ms_alert(f"[INFO][{self.unique_key}] Updating data table={tbl_main} | updated_records={self.all_counts}")
+                    print(f"[INFO][{self.unique_key}] Updating data table={tbl_main} | updated_records={self.all_counts}")
+                time.sleep(1)
+            ms_alert(f"[INFO][{self.unique_key}] Completed update data tables={completed_tbl} | updated_records={self.all_counts}")
         except Exception as e:
             raise e
         finally:
             gc.collect()
-            time.sleep(1)

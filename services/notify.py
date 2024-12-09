@@ -39,6 +39,6 @@ def ms_alert(text: str) -> None:
             "text": text
         })
         headers = {'Content-Type': 'application/json'}
-        requests.request("POST", url, headers=headers, data=payload, timeout=10)
+        requests.request("POST", url, headers=headers, data=payload)
     except Exception as e:
         print(f"[Warning] cannot send noti as {e}")

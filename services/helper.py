@@ -24,7 +24,7 @@ class Helper:
             print(f"Error: {e}")
 
     @staticmethod
-    def is_exceed_time() -> bool:
+    def is_exceed_time(unique_key) -> bool:
         if int(env_vars["IS_VALIDATE_TIME"]):
             # Validate time, If NOT between 23:00 - 03:30 => this will return True
             current_time = datetime.now().time()
@@ -32,6 +32,8 @@ class Helper:
             start_time = dtime(23, 0)  # 11:00 PM
             end_time = dtime(3, 30)    # 3:30 AM
             is_exceed = not(start_time <= current_time or current_time < end_time)
+            if is_exceed:
+                ms_alert(f"[INFO][{unique_key}] Exceed time process")
             return is_exceed
     
     @staticmethod

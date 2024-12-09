@@ -66,8 +66,7 @@ class ImportData:
             self.cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
             processed_files = []
             for filename in os.listdir(folder_path):
-                if Helper.is_exceed_time():
-                    ms_alert(f"[INFO][{self.unique_key}] Exceed time process")
+                if Helper.is_exceed_time(self.unique_key):
                     break
                 filepath = os.path.join(folder_path, filename)
                 if os.path.isfile(filepath):
@@ -93,8 +92,7 @@ class ImportData:
             pre_folder_path = folder_path + "/preprocessed"
             if os.path.exists(pre_folder_path):
                 for filename in os.listdir(pre_folder_path):
-                    if Helper.is_exceed_time():
-                        ms_alert(f"[INFO][{self.unique_key}] Exceed time process")
+                    if Helper.is_exceed_time(self.unique_key):
                         break
                     txt_filename = filename
                     file_path = os.path.join(pre_folder_path, txt_filename)
