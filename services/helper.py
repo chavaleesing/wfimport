@@ -4,6 +4,8 @@ from datetime import datetime, time as dtime
 
 from services.notify import ms_alert
 
+from dotenv import dotenv_values
+env_vars = dotenv_values(".env")
 
 class Helper:
 
@@ -23,12 +25,14 @@ class Helper:
 
     @staticmethod
     def is_exceed_time() -> bool:
-        # Validate time, If NOT between 23:00 - 03:30 => this will return True
-        current_time = datetime.now().time()
-        start_time = dtime(23, 0)  # 11:00 PM
-        end_time = dtime(3, 30)    # 3:30 AM
-        is_exceed = not(start_time <= current_time or current_time < end_time)
-        return is_exceed
+        if int(env_vars["IS_VALIDATE_TIME"]):
+            # Validate time, If NOT between 23:00 - 03:30 => this will return True
+            current_time = datetime.now().time()
+            print(f"current time to validate: {current_time}")
+            start_time = dtime(23, 0)  # 11:00 PM
+            end_time = dtime(3, 30)    # 3:30 AM
+            is_exceed = not(start_time <= current_time or current_time < end_time)
+            return is_exceed
     
     @staticmethod
     def fix_error_file(unique_key, preprocessed_file_path, filename, inserted_record) -> None:
