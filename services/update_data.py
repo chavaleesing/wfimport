@@ -22,6 +22,7 @@ class UpdateData:
         try:
             tbl_mains = env_vars["UPDATE_TABLES"].split(",")
             completed_tbl = []
+            partial_completed_tbl = []
             for tbl_main in tbl_mains:
                 ms_alert(f"[INFO][{self.unique_key}] Updating data table: {tbl_main}")
                 if Helper.is_exceed_time(self.unique_key):
@@ -54,8 +55,12 @@ class UpdateData:
                     self.conn.commit()
                     self.all_counts += updated_rows
                     print(f"[INFO][{self.unique_key}] Updating data table={tbl_main} | updated_records={self.all_counts}")
+                    if updated_rows == 0:
+                        partial_completed_tbl.append(tbl_main)
+                        is_process_ids = False
+                        break
                 time.sleep(1)
-            ms_alert(f"[INFO][{self.unique_key}] Completed update data tables={completed_tbl} | updated_records={self.all_counts}")
+            ms_alert(f"[INFO][{self.unique_key}] Completed update data completed_tbl={completed_tbl} | partial_completed_tbl={partial_completed_tbl} | updated_records={self.all_counts}")
         except Exception as e:
             raise e
         finally:
