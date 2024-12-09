@@ -86,9 +86,10 @@ gsutil -m cp \   "gs://newwelfare_batch_uat/batch/welfare/datainno/tbl_companies
 ```
 
 
-Execute python script (ตรง data/credit ให้ใส่  folder name ที่อยากจะ import)
+Execute python script
 ```
-python3 main.py data/credit
+python3 main.py data/<folder_name> // สำหรับการ import data เข้า temp table
+python3 main.py update // สำหรับการ update data เข้า main table (list table ไป set ใน .env file)
 ```
 
 
@@ -113,6 +114,11 @@ DB_HOST=
 DB_USER=
 DB_PASSWORD=
 DATABASE=
+
+IS_ALERT=1
+IS_VALIDATE_TIME=1
+
+UPDATE_TABLES="tbl_companies_audit,tbl_company_accounts,tbl_companies,tbl_company_accounts_audit"
 ...
 ```
 
@@ -129,8 +135,10 @@ format file must be `tbl_privilege_txn_202XXX_XX.txt.gz` to folder `data/<DB>`
 
 update main.py on data folder to import,
 then run
+`python3 main.py data/<folder_name>` OR `python3 main.py update`
 ```
-python3 main.py
+python3 main.py data/<folder_name> // สำหรับการ import data เข้า temp table
+python3 main.py update // สำหรับการ update data เข้า main table (list table ไป set ใน .env file)
 ```
 
 ---
