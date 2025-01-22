@@ -1,8 +1,6 @@
 import os
-import gc
 import gzip
 import shutil
-import time
 import uuid
 
 from datetime import datetime
@@ -44,20 +42,21 @@ class ImportData:
             columns = ', '.join(df.columns)
             sql = f"INSERT INTO {tbl_name} ({columns}) VALUES ({placeholders})"
             batch_size = int(env_vars["BATCH_SIZE"])
-            for start in range(0, total_records, batch_size):
+            commit_interval = 100
+            for i, start in enumerate(range(0, total_records, batch_size)):
                 batch_data = [tuple(row) for row in df[start:start+batch_size].values]
                 self.cursor.executemany(sql, batch_data)
-                self.conn.commit()
                 commited_reocrds += len(batch_data)
                 self.all_counts += len(batch_data)
-                print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
+                print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] importing {commited_reocrds} (all_counts={self.all_counts})")
+                if i != 0 and (i % commit_interval == 0 or start + batch_size >= total_records):
+                    self.conn.commit()
+                    print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][{self.unique_key}] {commited_reocrds} records imported successfully (all_counts={self.all_counts})")
         except Exception as e:
             Helper.fix_error_file(self.unique_key, preprocessed_file_path, filename, commited_reocrds)
             raise e
         finally:
             del df
-            gc.collect()
-            time.sleep(1)
 
     
     def bulk_import(self, folder_path) -> None:
