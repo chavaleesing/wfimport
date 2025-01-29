@@ -60,16 +60,17 @@ class UpdateData:
                         updated_rows = self.cursor.rowcount
                         update_count += updated_rows
                         self.all_counts += updated_rows
-                        print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][INFO][{self.unique_key}] Updating {updated_rows} on {tbl_main} | all_counts={self.all_counts}")
+                        self.conn.commit()
+                        print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][INFO][{self.unique_key}] Updating data table={tbl_main} | updated_records={self.all_counts}")
                     if update_count == 0:
                         is_process_ids = False
                         break
                     else:
-                        self.conn.commit()
-                        print(f"[{datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}][INFO][{self.unique_key}] Updating data table={tbl_main} | updated_records={self.all_counts}")
+                        ms_alert(f"[INFO][{self.unique_key}] table={tbl_main} | updated_records={self.all_counts}")
                         completed_tbl.add(tbl_main)
             ms_alert(f"[INFO][{self.unique_key}] Completed update data completed_tbl={completed_tbl} | updated_records={self.all_counts}")
         except Exception as e:
+            ms_alert(f"🚨 🚨 🚨 [ERROR][{self.unique_key}] Error while update data: {e}")
             raise e
         finally:
             close_conn(self.conn)
